@@ -1,39 +1,42 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const session = require('express-session')
+const session = require('express-session');
 const customer_routes = require('./router/auth_users.js').authenticated;
 const genl_routes = require('./router/general.js').general;
 
 const app = express();
 
+// Middleware to parse JSON bodies
 app.use(express.json());
 
-app.use("/customer",session({secret:"fingerprint_customer",resave: true, saveUninitialized: true}))
+// Session middleware (applied globally)
+app.use(session({
+    secret: "fingerprint_customer",
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: false } // Set to true if using HTTPS
+}));
 
-app.use("/customer/auth/*", function auth(req,res,next){
-    // Check if user is authenticated
+// Middleware to authenticate users for /customer/auth/* routes
+app.use("/customer/auth/*", function auth(req, res, next) {
     if (req.session.authorization) {
-        let token = req.session.authorization['accessToken']; // Access Token
-        
-        // Verify JWT token for user authentication
+        const token = req.session.authorization['accessToken']; // Access Token
         jwt.verify(token, "access", (err, user) => {
-            if (!err) {
-                req.user = user; // Set authenticated user data on the request object
-                next(); // Proceed to the next middleware
-            } else {
-                return res.status(403).json({ message: "User not authenticated" }); // Return error if token verification fails
+            if (err) {
+                return res.status(403).json({ message: "User not authenticated" });
             }
+            req.user = user;
+            next();
         });
-        
-        // Return error if no access token is found in the session
     } else {
         return res.status(403).json({ message: "User not logged in" });
     }
 });
- 
-const PORT =5000;
 
-app.use("/customer", customer_routes);
-app.use("/", genl_routes);
+// Routes
+app.use("/customer", customer_routes); // Authenticated routes
+app.use("/", genl_routes); // General routes
 
-app.listen(PORT,()=>console.log("Server is running"));
+// Start the server
+const PORT = 5001;
+app.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
